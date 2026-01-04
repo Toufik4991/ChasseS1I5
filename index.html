@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Locker 6x6 Advanced</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #050505;
+            overflow: hidden;
+        }
+
+        #main-container {
+            position: relative;
+            width: 95vw;
+            max-width: 400px;
+            aspect-ratio: 2/3;
+            background-color: #000;
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+            border: 1px solid #1a1a1a;
+        }
+
+        #secret-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+            z-index: 1;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        <img id="secret-image" src="Imprim.jpg" alt="Secret">
+        <canvas id="lockCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('lockCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('main-container');
+        const img = document.getElementById('secret-image');
+
+        // --- TON PARCOURS AVEC DOUBLON ---
+        const SECRET_STEPS = [33, 27, 20, 13, 7, 1, 2, 9, 4, 5, 11, 17, 22, 27];
+        const SECRET_PATTERN = SECRET_STEPS.join(','); 
+        
+        let points = [];
+        let selectedPoints = [];
+        let isDrawing = false;
+        let mousePos = { x: 0, y: 0 };
+
+        function init() {
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+            
+            const gridSize = 6; 
+            const margin = 35;
+            const spacingX = (canvas.width - margin * 2) / (gridSize - 1);
+            const startY = (canvas.height - (spacingX * (gridSize - 1))) / 2;
+
+            points = [];
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    points.push({
+                        x: margin + col * spacingX,
+                        y: startY + row * spacingX,
+                        id: points.length
+                    });
+                }
+            }
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (selectedPoints.length > 0) {
+                ctx.beginPath();
+                ctx.lineWidth = 6;
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                ctx.strokeStyle = "#00ff96"; 
+                ctx.moveTo(selectedPoints[0].x, selectedPoints[0].y);
+                for (let p of selectedPoints) {
+                    ctx.lineTo(p.x, p.y);
+                }
+                if (isDrawing) {
+                    ctx.lineTo(mousePos.x, mousePos.y);
+                }
+                ctx.stroke();
+            }
+
+            points.forEach(p => {
+                // On vérifie si ce point est le tout dernier sélectionné pour l'effet visuel
+                const isLast = selectedPoints.length > 0 && selectedPoints[selectedPoints.length - 1] === p;
+                const isUsed = selectedPoints.includes(p);
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, isLast ? 8 : 4, 0, Math.PI * 2);
+                ctx.fillStyle = isUsed ? "#fff" : "#333";
+                ctx.fill();
+            });
+        }
+
+        function getClosestPoint(x, y) {
+            return points.find(p => Math.hypot(p.x - x, p.y - y) < 20);
+        }
+
+        function triggerVibe() {
+            if ("vibrate" in navigator) navigator.vibrate(12);
+        }
+
+        function handleStart(x, y) {
+            isDrawing = true;
+            selectedPoints = [];
+            const p = getClosestPoint(x, y);
+            if (p) { 
+                selectedPoints.push(p); 
+                triggerVibe(); 
+            }
+            draw();
+        }
+
+        function handleMove(x, y) {
+            if (!isDrawing) return;
+            mousePos = { x, y };
+            const p = getClosestPoint(x, y);
+            
+            // LOGIQUE AUTORISANT LE REPASSAGE SUR UN POINT
+            // On ajoute le point si c'est un nouveau point par rapport au précédent
+            if (p && (selectedPoints.length === 0 || p !== selectedPoints[selectedPoints.length - 1])) {
+                selectedPoints.push(p);
+                triggerVibe();
+            }
+            draw();
+        }
+
+        function handleEnd() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            const userPattern = selectedPoints.map(p => p.id).join(',');
+            
+            if (userPattern === SECRET_PATTERN) {
+                if ("vibrate" in navigator) navigator.vibrate([40, 40, 40]);
+                canvas.style.display = "none";
+                img.style.display = "block";
+            } else {
+                if ("vibrate" in navigator) navigator.vibrate(150);
+                selectedPoints = [];
+                draw();
+            }
+        }
+
+        canvas.addEventListener('mousedown', e => handleStart(e.offsetX, e.offsetY));
+        window.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            handleMove(e.clientX - rect.left, e.clientY - rect.top);
+        });
+        window.addEventListener('mouseup', handleEnd);
+
+        canvas.addEventListener('touchstart', e => {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            handleStart(touch.clientX - rect.left, touch.clientY - rect.top);
+        }, {passive: false});
+        canvas.addEventListener('touchmove', e => {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            handleMove(touch.clientX - rect.left, touch.clientY - rect.top);
+        }, {passive: false});
+        canvas.addEventListener('touchend', handleEnd);
+
+        window.onload = init;
+    </script>
+</body>
+</html>
